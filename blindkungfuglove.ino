@@ -10,7 +10,9 @@ BLEService gloveService("4DB09DD9-E941-4F15-B506-3BA4F524C400"); // This is our 
 // This is the characteristic that enables haptic feedback
 BLECharCharacteristic hapticCharacteristic("4DB09DD9-E941-4F15-B506-3BA4F524C401", BLERead | BLEWrite);
 // This is the characteristic that enables listening for punches
-BLECharCharacteristic punchCharacteristic("4DB09DD9-E941-4F15-B506-3BA4F524C402", BLERead | BLENotify);
+BLECharCharacteristic punchCharacteristic("4DB09DD9-E941-4F15-B506-3BA4F524C402", BLERead | BLEWrite | BLENotify);
+
+boolean notify = false;
 
 void setup() {
   pinMode(ledPin, OUTPUT); // Use the LED on pin 13 as an output
@@ -25,7 +27,7 @@ void setup() {
   CurieIMU.attachInterrupt(shockCallback);
 
   // Shock detection setup
-  CurieIMU.setDetectionThreshold(CURIE_IMU_SHOCK, 1500); // Let's start with 1.5 G
+  CurieIMU.setDetectionThreshold(CURIE_IMU_SHOCK, 7500); // Let's start with 1.5 G
   CurieIMU.setDetectionDuration(CURIE_IMU_SHOCK, 50);    // A punch will take no more than 50 ms
   CurieIMU.interrupts(CURIE_IMU_SHOCK);
   
@@ -64,8 +66,18 @@ void loop() {
         hapticCharacteristic.setValue(0);
       }
     
-      // Only detetct each punch once. This might not work...
-      //punchCharacteristic.setValue(0); 
+      // Notify detected punches
+      if (notify) {
+        if (punchCharacteristic.setValue(1)) {
+          Serial.println("Notified punch");
+        } else {
+          Serial.println("Couldn't notify");
+        }
+        
+        // Only detetct each punch once. This might not work...
+        punchCharacteristic.setValue(0);
+        notify = false;
+      }
     }
 
     Serial.print("Disconnected from ");
@@ -79,14 +91,14 @@ void blink(boolean on) {
     digitalWrite(ledPin, HIGH);
   } else {
     //Serial.println("LED off");
-    //digitalWrite(ledPin, LOW);
+    digitalWrite(ledPin, LOW);
   }
 }
 
 void vibrate(char operation) {
   long startMillis = millis();
   long duration = 0;
-  blink(true);
+  //blink(true);
       
   switch (operation) {
     case 'H': // Yay, we hit an enemy
@@ -102,18 +114,19 @@ void vibrate(char operation) {
       duration = 2000;
       break;
     default:
-      Serial.println("We don't take kindly to that command around here: " + operation);
+      Serial.print("We don't take kindly to that command around here: ");
+      Serial.println(operation);
   }
   while (millis() - startMillis < duration) {
   }
   analogWrite(vibratorPin, 0);
-  blink(false);
+  //blink(false);
 }
 
 static void shockCallback(void) {
   if (CurieIMU.getInterruptStatus(CURIE_IMU_SHOCK)) {
     Serial.println("MEGA PUNCH!");
-    punchCharacteristic.setValue(1);
+    notify = true;
   }
 }
 
